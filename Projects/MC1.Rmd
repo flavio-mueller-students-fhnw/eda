@@ -1,0 +1,209 @@
+---
+title: "Mini Challenge 1 eda"
+output: html_notebook
+---
+
+Als erstes müssen alle packages eingebunden werden. Ich habe mich für die tidyverse packages entschieden, da diese einen sehr grossen Teil der explorativen Datenanalyse abdecken und auch in der Wirtschaft regen gebrauch finden.
+
+```{r}
+library(tidyverse) #import the dplyr package suite
+```
+
+Nun müssen die zur Verfügung gestellten Daten implementiert werden. Diese kann mittels der read_csv() funktion aus dem dyplr package verwendet werden
+```{r}
+untidy_clients <- read.csv("telekom_kundenabgang.csv", stringsAsFactors = TRUE)
+```
+
+Um ein Gefühl für die Daten zu bekommen, kann die funktion str() und die summary() Funktion verwendet werden.
+```{r}
+str(untidy_clients)
+```
+Die Summary funktion kann verwendet werden, um einen groben überblick über das gesamte Dataframe zu erhalten, zusätzlich, werden bei Numerischen werten noch statistische Eigenschaften berechnet.
+```{r}
+untidy_clients %>%
+  summary()
+```
+Dabei fällt auf, dass die Spalte SeniorCizizen nur Werte zwischen 0 und 1 hat mit einem Median von 0 und einem Mean von 0.162. Daher gehe ich davon aus, dass Hier gar kein Numerischer Wert sein sollte, sondern ein Boolscher Wert resp. "Yes" oder "No". Dies kann erreicht werden, indem die Spalte zu einem Factor gecasted wird.
+```{r}
+untidy_clients <- untidy_clients %>%
+  mutate(fac_SeniorCitizen = factor(SeniorCitizen, levels=c(0,1), labels=c("No", "Yes")))
+summary(untidy_clients$fac_SeniorCitizen)
+```
+
+Weiter ist die Spalte customerID im Moment noch einen Factor. In wirklichkeit handelt es sich jedoch um einen normal String wert. Dies kann mittels as.character() geändert werden.
+```{r}
+untidy_clients <- untidy_clients %>%
+  mutate(str_customerID = as.character(customerID))
+summary(untidy_clients$str_customerID)
+```
+
+Dabei fällt auf, dass es einige customer_ID mehrmals gibt. Dublizierte Werte verändern das Datenset, da wir dies nicht wollen, werden ich mit distinct() alle Dublikate eliminieren.
+
+```{r}
+untidy_clients <- untidy_clients %>%
+  distinct()
+summary(untidy_clients)
+```
+Nun hat es alle Dublikate bis auf eine ID entfernt. Bei dieser Id muss noch weiter geforscht werden. Mit filter() können alle Observationen mit dieser customer_ID angezeigt werden.
+```{r}
+untidy_clients %>%
+  filter(customerID == "2673-CXQEU")
+```
+Es scheint als während diese Beobachtungen wirklich eigenständig jedoch mit der gleichen CustomerID. Da für uns die customer_ID in der Datenanalyse keine Aussagen generieren kann, lasse ich diese 4 Beobachtungen im Dataframe.
+
+Als Schönheitsfehler fällt noch auf, dass die Spalten nicht immer gleich bennant sind. Dies kann mittels rename() geändert werden.
+```{r}
+untidy_clients <- untidy_clients %>%
+  rename(CustomerID = customerID,
+         Gender = gender,
+         Tenure = tenure,
+         str_CustomerID = str_customerID)
+summary(untidy_clients)
+```
+In der Spalte TotalCharges gibt es Observationen ohne Werte. Um diese genauer zu untersuche wird danach gefiltert.
+
+```{r}
+untidy_clients %>%
+  filter(is.na(TotalCharges))
+```
+
+Wir sehen, dass alle die keinen Wert für TotalCharges haben eine Tenure von 0 haben. Um zu sehen ob alle mit Tenure 0 keine Totalcharges haben, filtern wir danach.
+
+```{r}
+untidy_clients %>%
+  filter(Tenure == 0 & !is.na(TotalCharges))
+```
+Das heisst alle mit Tenure (Laufzeit) = 0 haben noch keine Rechnung gestellt bekommen, desshalb werde ich für die N/A Werte in TotalCharges einfach 0 einfügen.
+
+```{r}
+untidy_clients <- untidy_clients %>%
+  mutate(TotalCharges = replace(TotalCharges,is.na(TotalCharges),0))
+summary(untidy_clients)
+```
+
+Schlussendlich haben wir noch eine Observation welche als Churn keinen Wert hat. Da es ca. 7000 Werte sind und Churn unsere Target Variable ist, werde ich diese Observation löschen.
+
+```{r}
+untidy_clients <- untidy_clients %>%
+  drop_na(Churn)
+summary(untidy_clients)
+```
+
+Nun ist sind die Daten bereinigt und wir können sie in ein neues Dataframe packen, mit welchem wir dann arbeiten können.
+
+```{r}
+clients <- untidy_clients %>%
+  mutate(CustomerID = str_CustomerID, 
+         SeniorCitizen = fac_SeniorCitizen) %>%
+  select(Gender, 
+         SeniorCitizen, 
+         Partner, 
+         Dependents, 
+         Tenure, 
+         PhoneService, 
+         MultipleLines, 
+         InternetService, 
+         OnlineSecurity, 
+         OnlineBackup, 
+         DeviceProtection, 
+         TechSupport, 
+         StreamingTV, 
+         StreamingMovies, 
+         Contract, 
+         PaperlessBilling, 
+         PaymentMethod, 
+         MonthlyCharges, 
+         TotalCharges, 
+         Churn)
+
+summary(clients)
+```
+
+Nun analysieren wir univariante Verteilungen, Da die meisten Variablen Qualtiativ sind, machen wir aus allen quantitativen Variabeln ein Histogram mit ggplot2
+
+```{r}
+ggplot(clients, aes(x = Tenure)) +
+  geom_histogram(binwidth = 1)
+```
+Wir sehen, das die Laufzeit eine Bimodale Verteilung aufweist, mit vielen Langzeitkunden, und sehr vielen Kunden, welche schon nach einer Perdiode wieder wechseln.
+
+```{r}
+ggplot(clients, aes(x = MonthlyCharges)) +
+  geom_histogram(binwidth = 5)
+```
+Hier sehen wir, dass die meisten einen günstigen Plan haben, und der grösste Teil zwischen 70 und 100 ist.
+
+```{r}
+ggplot(clients, aes(x = TotalCharges)) +
+  geom_histogram(binwidth = 200)
+```
+Bei der Variable TotalCharges fällt auf, dass sie einer Exponentialvertielung ähnelt. Dies ist zurückzuführen darauf, dass viele Kunden bereits nach einer Periode den Anbieter wechseln und damit auch keine hohen Kosten haben.
+
+```{r}
+ggplot(clients, aes(x = Tenure, y = MonthlyCharges)) +
+  geom_density2d_filled()
+```
+
+Die zweidimensionale Verteilung der monatlichen Gebüren und der Laufzeit zeigt auf, dass die meisten Kunden welche eine Kurze Laufzeit haben, entweder einen Vertrag unter 25 Montalichen Kosten oder ca. 75 Montaliche Kosten haben.
+
+```{r}
+ggplot(clients, aes(x = Churn, y = PaymentMethod)) +
+  geom_count()
+```
+Hier fällt auf das die meisten abwandernden Kunden mit einem elektronischen Check bezahlen. Ob das zufällig ist oder nicht kann noch nicht beurteilt werden. Es ist auf jeden Fall eine spannende Entdeckung. Was jedoch angemerkt werden muss, ist dass die meisten Kunden via online Check bezahlen.
+
+```{r}
+ggplot(clients, aes(x = Churn, y = Contract)) +
+  geom_count()
+```
+
+Auch hier spannend, dass ein grösserer Teil von Kunden abspringt, wenn sie einen Monatlichen Vertrag haben.
+
+```{r}
+ggplot(clients, aes(x = Tenure, y = MonthlyCharges, color = Churn)) +
+  geom_point()
+```
+Hier fällt auf, dass die Kunden meist bei hohen monatlichen Kosten abspringen. Dabei sprignen die meisten eher früh ab. Es fällt auch auf, dass bei den billigeren Verträgen nur sehr vereinzelt Kunden abspringen.
+
+
+Um eine differenziertere Aussage über abspringende Kunden machen zu können, werden wir einen Entscheidungsbaum generieren.
+```{r}
+library(rpart)
+library(rpart.plot)
+
+train_ids = sample(1:nrow(clients), 0.8 * nrow(clients), replace = TRUE)
+
+client_train = clients[train_ids, ]
+client_test = clients[-train_ids, ]
+
+
+client_churn_model = rpart(Churn ~ ., 
+                           data = client_train, 
+                           method = "class", 
+                           control = rpart.control(minsplit = 20, 
+                                             cp = 0.005,
+                                             maxdepth = 10,))
+
+client_test$pred <- predict(client_churn_model, client_test, type = "class")
+
+print(mean(client_test$Churn == client_test$pred))
+
+rpart.plot(client_churn_model)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

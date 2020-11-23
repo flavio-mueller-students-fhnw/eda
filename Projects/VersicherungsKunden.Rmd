@@ -1,0 +1,138 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+In dieser Mini-Challenge des Modul eda im BSc Data Science der FHNW werde ich analyisieren, welche Faktoren die Krankheitskosten der Kunden einer Versicherungsgesselschaft beeinflusst.
+
+Als erstes müssen alle nötigen Software Bibliotheken geladen werden. Ich benutze für diese Aufgabe die Bibliothek "tidyverse", welche selbst aus verschiedenen Bibliotheken besteht. Daraus werde ich vor allem die zwei Bibliotheken "dplyr" für Manipulationen an den Daten, und "ggplot2" für das Visiualisieren der Daten verwenden.
+
+```{r}
+library(tidyverse)
+```
+
+Nun sind die notwendigen Software Bibliotheken geladen und die Daten können geladen werden. Die zu verfügung gestellten Daten sind im File "in_clients.csv" im gleichen Ordner gespeichert. Um diese zu laden, kann die "read.csv" Methode gebraucht werden. Gepeichert wird das daraus resultierende Dataframe in der Variable "untidy_clients".
+
+```{r}
+file_path <- "./in_clients.csv"
+untidy_clients <- read.csv(file_path)
+```
+
+Um einen Überblick über die Daten zu erhalten, werden wir deren Struktur mit der "str" und der "summary" Methode überprüfen. Weiter werden wir einige Zeilen ausgeben, um auch die dahinter stehenden Werte besser betrachten zu können. Da wir nicht einfach die obersten oder untersten Beobachtungen wollen, da diese ein unvollständiges Bild liefern können, wird mit der "sample" Methode eine Auswahl getroffen. Um einen noch besseren Überblick zu bekommen, führe ich den Codeblock mit der "sample" Methode mermals aus, da es immer andere Beobachtungen zurückgeben wird.
+
+```{r}
+str(untidy_clients)
+```
+
+```{r}
+summary(untidy_clients)
+```
+
+```{r}
+sample_ids <- sample(nrow(untidy_clients), 10)
+print(untidy_clients[sample_ids, ])
+```
+
+Wenn wir nun die Ausgaben der obigen Codeblöcken betrachten, fällt auf, dass die Variablen "sex", "smoker" und "region" als Character klassifiziert wurden. Es könnte jedoch sein, dass diese jeweils nur wenige verschiedene Werte besitzen, dann könnte man diese als Factor darstellen. Um dies zu überprüfen, werden wir die "n_distinct" Methode von dplyr für diese drei Variabeln verwenden.
+
+```{r}
+print(n_distinct(untidy_clients$sex))
+print(n_distinct(untidy_clients$smoker))
+print(n_distinct(untidy_clients$region))
+```
+
+Wir sehen, dass es jeweils nur 2 bzw. 4 verschiedene Werte in den Spalten vorhanden sind. Desshalb werden wir diese in Faktoren umwandeln. Da wir noch keine Änderungen an den Daten vorgenomme haben, ist die einfachste Methode um dies zu tun, die Daten erneut zu importieren, jedoch mit andernen parametern.
+
+```{r}
+untidy_clients <- read.csv(file_path, stringsAsFactors = TRUE)
+```
+
+Wenn wir nun mit der "str" Methode die Daten überprüfen, sehen wir, dass die drei Werte nun durch einen Faktor representiert werden.
+
+```{r}
+str(untidy_clients)
+```
+
+Da die Daten nun gesäubert sind, und in alle Variablen in den richtigen Datentype vorliegen, können wir beginnen, einzelne Verteilugnen zu analysieren. Dazu werden die Daten noch in die neue Variable "clients" gespeichert, um die Datenbereinigung und Analyse stylistisch zu trennen. Es wird jedoch keine Kopie des Dataframe gemacht, sondern nur ein zweiter Pointer hinzugefügt, mit welchem man das gleiche Dataframe ansteuert.
+
+```{r}
+clients <- untidy_clients
+```
+
+Als erste Analyse, werden wir die quantitativen Variabeln in einem Histogram Darstellen, um ein Gefühl für deren Verteilung zu bekommen. Um diese Daten darzustellen, werden wir die "ggplot" Methode aus der "ggplot2" Bibliothek verwenden.
+
+```{r}
+ggplot(clients, aes(x = age)) +
+  geom_histogram(bins = 50) +
+  ggtitle("Verteilung Alter")
+```
+Wir sehen, dass es ca. doppelt so viele Menschen pro Altersschicht hat bei Menschen unter 20 als darüber. Die restlichen Altersschichten, sind alle ca. gleich gut vertreten. Zum jetzigen Zeitpunkt kann noch keine Aussage über diese Anomalie bei jüngeren Kunden gemacht werden.
+
+```{r}
+ggplot(clients, aes(x = bmi)) +
+  geom_histogram(bins = 30) +
+  ggtitle("Verteilung BMI")
+```
+Bei der Variable BMI fällt sofort auf, dass sie unimodal und ca. symetrisch ist, und einer Normalverteilung ähnelt. Dies wird auch klar, wenn man die "summary" Methode nochmals aufruft.
+```{r}
+summary(clients$bmi)
+```
+Der Median und der Durchschnitt sind sehr ähnlich und das erste und Dritte Quartil sind ca. gleich weit weg vom Median resp. vom Arithmetischen mittel.
+
+```{r}
+ggplot(clients, aes(x = children)) +
+  geom_histogram(bins = 6) +
+  ggtitle("Verteilung Kinder")
+```
+Hier fällt auf, dass kein Kind die gröste Gruppe keine Kinder hat. Danach nimmt die Anzahl Kunden ab, wenn die Anzahl Kinder zunimmt. Diese Verteilung gleicht einer Exponentialverteilung und ist unimodal.
+
+```{r}
+ggplot(clients, aes(x = charges)) +
+  geom_histogram(bins = 25) +
+  ggtitle("Verteilung Kosten")
+```
+Auch hier handelt es sich um eine unimodale Verteilung, jeodoch nimmt die Anzahl mit steigenden Kosten nicht proportional oder exponentiel ab, sondern es gibt bei ca. 30'000 eine stelle mit einer kleinen Anzahl, diese nimmt aber Richtung 40'000 wieder zu. Weiter gibt es einige Wenige mit sehr wenig Kosten. Der Grösste Teil befindet sich jeodch zwischen ca. 3'000 und 15'000.
+
+
+Um den Einfluss von Variabeln auf die Zielvariable zu untersuchen, werden ich ein Scatterplot mit verschiedenen Variabeln auf der Y Achse machen.
+Im ersten Schritt werden wir untersuchen, ob der BMI und der Fakt dass jemand Raucher ist, einen Einfluss auf die Kosten desjenigen Kunden hat.
+
+```{r}
+ggplot(clients, aes(x = charges, y = age, color = smoker)) +
+  geom_point() +
+  ggtitle('Abängigkeit der Kosten von BMI und Raucher')
+```
+
+Was hier direkt auffällt, ist alle Kunden, welche Kosten über 40'000 verursachen auch Raucher sind. Weiter gibt es keine Raucher, welche weniger als 10'000 Kosten verursachen.
+
+
+```{r}
+library(rpart)
+library(rpart.plot)
+
+train_ids = sample(nrow(clients), nrow(clients) * 0.8)
+clients_train = clients[train_ids, ]
+clients_test = clients[-train_ids, ]
+
+client_model <- rpart(charges ~ ., data = clients_train, method = "anova")
+
+clients_test$pred <- predict(client_model, clients_test)
+
+print(sqrt(mean((clients_test$pred - clients_test$charges)^2)))
+
+rpart.plot(client_model)
+
+```
+
+
+
+
+
+
+
+
+
+
+
